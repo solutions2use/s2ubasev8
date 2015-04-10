@@ -51,8 +51,8 @@ class MailMessage(orm.Model):
 
     _inherit = 'mail.message'   
         
-    def create(self, cr, uid, vals, context=None):
-        
+    def create(self, cr, uid, vals, context=None):               
+            
         this = self.pool['res.users'].browse(cr, SUPERUSER_ID, uid, context=context)
         
         if vals.get('type', False) == 'comment':
@@ -90,6 +90,19 @@ class MailMessage(orm.Model):
                 if partner:
                     vals['model'] = 'res.partner'
                     vals['res_id'] = partner[0]
+        elif vals.get('type', False) == 'email' and \
+                   vals.get('parent_id', False):
+                                     
+            mes = self.browse(cr, SUPERUSER_ID, vals.get('parent_id'), context=context)
+            
+            catchall_alias = self.pool['ir.config_parameter'].\
+                                get_param(cr, uid, "mail.catchall.alias", context=context)
+            alias_domain = self.pool['ir.config_parameter'].\
+                               get_param(cr, uid, "mail.catchall.domain", context=context)                                
+            if alias_domain and catchall_alias:
+                if mes.author_id:
+                    vals['email_from'] = formataddr((mes.author_id.name, '%s@%s' % \
+                                                          (catchall_alias, alias_domain)))                
 
         return super(MailMessage, self).create(cr, uid, vals, context=context)           
 
