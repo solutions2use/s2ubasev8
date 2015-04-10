@@ -68,11 +68,9 @@ class MailMessage(orm.Model):
                     if group.alias_id and group.alias_id.alias_name:
                         vals['email_from'] = formataddr((group.name, '%s@%s' % \
                                                (group.alias_id.alias_name, alias_domain)))
-                elif catchall_alias:
-                    print "yes"
+                elif catchall_alias:                    
                     vals['email_from'] = formataddr((this.name, '%s@%s' % \
-                                                          (catchall_alias, alias_domain)))
-                    print vals['email_from']
+                                                          (catchall_alias, alias_domain)))                    
                 
             
         
