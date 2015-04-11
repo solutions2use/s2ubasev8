@@ -17,10 +17,34 @@ import openerp.addons.decimal_precision as dp
 def decode_header(message, header, separator=' '):
     return separator.join(map(decode, filter(None, message.get_all(header, []))))
     
+def filter_message_id(subject):
+
+    t = re.compile(r'^.*\#(?P<message_id>\<.+\>)\#.*', re.MULTILINE)
+    t_parsed = [n.groups() for n in t.finditer(subject)]                       
+    if t_parsed:
+        return t_parsed[0][0]                                 
+    
+    return False
+            
 class MailThread(orm.AbstractModel):
 
     _inherit = 'mail.thread'       
         
+    def message_parse(self, cr, uid, message, save_original=False, context=None):
+    
+        msg_dict = super(MailThread, self).message_parse(cr, uid, message, 
+                                                         save_original=save_original, 
+                                                         context=context)
+                                                         
+        if not msg_dict.get('parent_id', False) and msg_dict.get('subject', False):
+            message_id = filter_message_id(msg_dict['subject'])
+            messages = self.pool['mail.message'].search(cr, SUPERUSER_ID, 
+                                                        [('message_id', '=', message_id)])
+            if messages:
+                msg_dict['parent_id'] = messages[0]
+        
+        return msg_dict
+                                                         
     def message_route(self, cr, uid, message, message_dict, model=None, thread_id=None,
                       custom_values=None, context=None):
             
@@ -32,11 +56,9 @@ class MailThread(orm.AbstractModel):
         in_reply_to = decode_header(message, 'In-Reply-To')
         thread_references = references or in_reply_to
         
-        if not thread_references:                              
-            t = re.compile(r'^.*\#(?P<message_id>\<.+\>)\#.*', re.MULTILINE)
-            t_parsed = [n.groups() for n in t.finditer(subject)]                       
-            if t_parsed:     
-                message_id = t_parsed[0][0]                             
+        if not thread_references:                                                      
+            message_id = filter_message_id(subject)
+            if message_id:                     
                 message['References'] = message_id
                 message['In-Reply-To'] = message_id
                             
@@ -66,7 +88,7 @@ class MailMessage(orm.Model):
                     group_model = self.pool['mail.group']
                     group = group_model.browse(cr, SUPERUSER_ID, vals.get('res_id'))            
                     if group.alias_id and group.alias_id.alias_name:
-                        vals['email_from'] = formataddr((group.name, '%s@%s' % \
+                        vals['email_from'] = formataddr((this.name, '%s@%s' % \
                                                (group.alias_id.alias_name, alias_domain)))
                 elif catchall_alias:                    
                     vals['email_from'] = formataddr((this.name, '%s@%s' % \
@@ -134,10 +156,8 @@ class MailMail(orm.Model):
         if subject and message_id:
             # als message_id nog niet in het subject is te vinden
             # deze dan toevoegen
-            
-            t = re.compile(r'^.*\#(?P<message_id>\<.+\>)\#.*', re.MULTILINE)
-            t_parsed = [n.groups() for n in t.finditer(subject)]                       
-            if not t_parsed:                                
+                        
+            if not filter_message_id(subject):                                
                 subject = '%s%s'%(subject, message_id)
             
         return subject
